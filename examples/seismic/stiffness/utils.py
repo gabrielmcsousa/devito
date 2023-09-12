@@ -7,7 +7,7 @@ from sympy import symbols, Matrix, ones
 
 class C_Matrix():
 
-    C_matrix_dependency = {'lam-mu': 'C_lambda_mu', 'vp-vs-rho': 'C_vp_vs_rho'}
+    C_matrix_dependency = {'lam-mu': 'C_lambda_mu', 'vp-vs-rho': 'C_vp_vs_rho', 'ip_is_rho': 'C_Ip_Is_rho'}
 
     def __new__(cls, model, parameters):
         c_m_gen = cls.C_matrix_gen(parameters)
@@ -236,6 +236,74 @@ class C_Matrix():
         subs = subs3D() if model.dim == 3 else subs2D()
         return Dvs.subs(subs)
 
+    @classmethod
+    def C_Ip_Is_rho(model):
+        def subs3D():
+            return {'C11': A,
+                    'C22': A,
+                    'C33': A,
+                    'C44': E,
+                    'C55': E,
+                    'C66': E,
+                    'C12': B,
+                    'C13': B,
+                    'C23': B} #Me passei nesse, n vi.
+        def subs2D():
+            return {'C11': Ip*vp,
+                    'C22': Ip*vp,
+                    'C33': Is*vs,
+                    'C12': Ip*vp - 2*Is*vs}
+        
+        matrix = C_Matrix._matrix_init(model.dim)
+        
+        vp = model.vp
+        vs = model.vs
+        rho = model.rho #Setei o rho na mão, ele assume que ja existe no model.
+        Ip = rho*vp
+        Is = rho*vs
+        A = Ip*vp #Construi como foi desenhado, mas entendi que foi so pra facilitar o desenho, apesar de que aqui tbm acaba facilitando a escrita eu acho.
+        B = Ip*vp - 2*Is*vs
+        E = Is*vs
+
+        subs = subs3D() if model.dim == 3 else subs2D()
+        M = matrix.subs(subs)
+
+        M.dIp = cls._generate_DIp(model)
+        M.dIs = cls._generate_DIs(model)
+        return M
+    
+    @staticmethod
+    def _generate_DIp(model):
+        def d_ip(i, j):
+            ii, jj = min(i, j), max(i, j)
+            if (ii <= model.dim and jj <= model.dim):
+                return model.vp
+            return 0
+
+        d = model.dim*2 + model.dim-2
+        Dip = [[d_ip(i, j) for i in range(1, d)] for j in range(1, d)]
+        return Matrix(Dip)
+    
+    @staticmethod
+    def _generate_DIs(model): #Ta invertido com o que ta no github
+        def subs3D():
+            return {'C12': -2*vs,
+                    'C13': -2*vs,
+                    'C23': -2*vs,
+                    'C44': vs,
+                    'C55': vs,
+                    'C66': vs}
+        def subs2D():
+            return {'C12': -2*vs,
+                    'C33': vs}
+
+        vs = model.vs
+
+        DIs = C_Matrix._matrix_init(model.dim)
+        subs = subs3D() if model.dim == 3 else subs2D()
+        M = DIs.subs(subs)
+
+        return M
 
 def D(self, shift=None):
     """
